@@ -1,0 +1,29 @@
+{
+  "source": "live-provider-commentary",
+  "sessionId": "sesn_01X9jC4GKZpLzpj13Vf5N4v9",
+  "answer": "This local experiment, titled \"Host Questions and Correlated Answers,\" demonstrates a pattern of binding a question identifier to a session turn and pre-associating an answer (\"forest\") with it before any dispatch occurs. The steps outline a claim-before-send approach: capture the question, tie it to the turn, assert the answer early, and reconcile delivery uncertainty before retrying. The outcome is marked \"passed\" purely as local test data, with no actual provider communication performed.",
+  "stopReason": "end_turn",
+  "eventTypes": [
+    "session.status_running",
+    "session.thread_status_running",
+    "user.message",
+    "span.model_request_start",
+    "agent.thinking",
+    "agent.message",
+    "span.model_request_end",
+    "session.thread_status_idle",
+    "session.usage",
+    "session.status_idle"
+  ],
+  "requestUsage": [
+    {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 600,
+      "output_tokens": 133,
+      "speed": "standard"
+    }
+  ],
+  "experimentHash": "da479821f49d8900c9801848e9a3baa4ee8ecbe1d0dcb01ac3ef40bdffa15922",
+  "scope": "A real text-only model response about the local experiment. External integrations and the experiment's correctness are not certified by this response."
+}

@@ -1,0 +1,47 @@
+// Application correlation protocol, carried inside ordinary user-message text.
+import { z } from "zod";
+import type Anthropic from "@anthropic-ai/sdk";
+const Question = z.strictObject({
+  kind: z.literal("clarification"), questionId: z.string().min(1),
+  prompt: z.string().min(1).max(1000),
+  options: z.array(z.string().min(1).max(120)).min(2).max(6)
+}).refine(x => new Set(x.options).size === x.options.length);
+export type Binding = { ownerId: string; sessionId: string; turn: number; responseVersion: number };
+type Pending = Binding & { eventId: string; question: z.infer<typeof Question>;
+  state: "pending" | "sending" | "sent" | "uncertain" };
+// In-process teaching store. Production needs durable transactional compare-and-set.
+export const pending = new Map<string, Pending>();
+const key = (session: string, event: string) => JSON.stringify([session, event]);
+export function captureQuestion(rawFinalText: string, eventId: string, trusted: Binding) {
+  const question = Question.parse(JSON.parse(rawFinalText));
+  const id = key(trusted.sessionId, eventId);
+  const prior = pending.get(id);
+  if (prior) {
+    if (JSON.stringify(prior.question) !== JSON.stringify(question)) throw new Error("Conflicting event");
+    return id;
+  }
+  pending.set(id, { ...trusted, eventId, question, state: "pending" });
+  return id;
+}
+export async function answerQuestion(client: Anthropic, id: string, answer: string, current: Binding) {
+  const record = pending.get(id);
+  if (!record || record.state !== "pending") throw new Error("Not pending");
+  if (record.ownerId !== current.ownerId || record.sessionId !== current.sessionId ||
+      record.turn !== current.turn || record.responseVersion !== current.responseVersion)
+    throw new Error("Foreign or stale question");
+  if (!record.question.options.includes(answer)) throw new Error("Invalid answer");
+  const text = JSON.stringify({ kind: "clarification_answer",
+    questionId: record.question.questionId, inReplyTo: record.eventId, answer });
+  record.state = "sending"; // Claim before awaiting; no concurrent duplicate send.
+  try {
+    const receipt = await client.beta.sessions.events.send(record.sessionId, {
+      events: [{ type: "user.message", content: [{ type: "text", text }] }]
+    }, { maxRetries: 0, timeout: 10000 });
+    record.state = "sent";
+    return receipt;
+  } catch (error) { record.state = "uncertain"; throw error; }
+}
+// Capture only canonical agent.message text, not provisional text deltas.
+// The UI supplies the user's actual selection, never a default auto-answer.
+// Trusted binding comes from authenticated host storage, not browser/model claims.
+// Reconcile uncertain delivery from history before permitting a further attempt.
