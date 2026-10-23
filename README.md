@@ -42,26 +42,79 @@ CLAUDE_MANAGED_ENVIRONMENT_ID=your_environment_id
 PORT=3037
 ```
 
-## How the application was developed
+## How the app was build
 
-The browser collects inputs; the Node host validates requests; the lesson implementation produces observable evidence. The architecture page walks through the real source with numbered steps, prerequisite configuration, source filenames and code excerpts.
+### 1. Reject a response captured for another turn
 
-### Lesson implementation
+The expected and current turn must match before an answer plan can be prepared. A changed turn keeps the question pending for a deliberate review.
 
-[src/lesson.ts](https://github.com/luiscoco/Udemy-claude-managed-agents-lesson-c37-app/blob/main/src/lesson.ts)
+Source: [src/lesson.ts](src/lesson.ts#L13)
 
 ```typescript
-  async run(input) {
-
-if(number(input,"expectedTurn")!==number(input,"currentTurn"))return report("conflict","The session turn changed after the question was captured",{state:"pending"},["Recheck trusted response binding before submission"]);
-if(text(input,"questionId")!=="q1"||!["forest","wetland"].includes(text(input,"answer")))return report("rejected","Question ID or selected option is invalid",{state:"pending"},["Require the actual user choice","Validate the offered options"]);
-return report("passed","Prepared a correlated answer for the current question",{state:"answered",envelope:{questionId:"q1",turn:2,answer:text(input,"answer")},providerSend:"not performed"},["Capture a canonical question","Bind it to the session turn","Claim before dispatch","Reconcile uncertain delivery before another attempt"]);
-
-  }
-};
+if (number(input, "expectedTurn") !== number(input, "currentTurn"))
+  return report(
+    "conflict",
+    "The session turn changed after the question was captured",
+    { state: "pending" },
+    ["Recheck trusted response binding before submission"],
+  );
 ```
 
-Read the architecture page for the remaining source excerpts and explanations, including input handling and optional provider behavior. The diagram describes this application, rather than implying that an external integration has been implemented.
+### 2. Validate the question and offered option
+
+The seeded question is q1 and only forest or wetland is supported. The returned envelope correlates that question and answer; providerSend remains not performed.
+
+Source: [src/lesson.ts](src/lesson.ts#L14) · selected statements
+
+```typescript
+if (
+  text(input, "questionId") !== "q1" ||
+  !["forest", "wetland"].includes(text(input, "answer"))
+)
+  return report(
+    "rejected",
+    "Question ID or selected option is invalid",
+    { state: "pending" },
+    ["Require the actual user choice", "Validate the offered options"],
+  );
+
+return report(
+  "passed",
+  "Prepared a correlated answer for the current question",
+  {
+    state: "answered",
+    envelope: { questionId: "q1", turn: 2, answer: text(input, "answer") },
+    providerSend: "not performed",
+  },
+  [
+    "Capture a canonical question",
+    "Bind it to the session turn",
+    "Claim before dispatch",
+    "Reconcile uncertain delivery before another attempt",
+  ],
+);
+```
+
+### Check your understanding
+
+Run **Answer the current question** in the application. Compare the result with these scenario expectations:
+
+```json
+{
+  "input": {
+    "questionId": "q1",
+    "answer": "forest",
+    "expectedTurn": 2,
+    "currentTurn": 2
+  },
+  "expectedOutcome": "passed",
+  "checkEvidence": {
+    "state": "answered"
+  }
+}
+```
+
+Then try **Reject a stale answer**. Its expected outcome is `conflict`; identify the condition or evidence field that explains the difference.
 
 ## Validation
 
